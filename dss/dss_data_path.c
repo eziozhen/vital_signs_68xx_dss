@@ -3176,83 +3176,8 @@ void MmwDemo_dataPathConfigBuffers(MmwDemo_DSS_DataPathObj *obj, uint32_t adcBuf
     MMW_ALLOC_BUF(radarCube, cmplx16ReIm_t,
         ADCdataBuf_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
         obj->numRangeBins * obj->numDopplerBins * obj->numRxAntennas *
-        obj->numTxAntennas);
+        obj->numTxAntennas * 2);
 
-    MMW_ALLOC_BUF(pRangeProfileCplx, cmplx16ReIm_t,
-                  radarCube_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->numRangeBins);
-
-    MMW_ALLOC_BUF(pVitalSigns_Breath_CircularBuffer, float,
-                  pRangeProfileCplx_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->circularBufferSizeBreath);
-
-    MMW_ALLOC_BUF(pVitalSigns_Heart_CircularBuffer, float,
-                  pVitalSigns_Breath_CircularBuffer_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->circularBufferSizeHeart);
-
-    MMW_ALLOC_BUF(pMotionCircularBuffer, float,
-                  pVitalSigns_Heart_CircularBuffer_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->motionDetection_BlockSize);
-
-    MMW_ALLOC_BUF(pDopplerWindow, float,
-                  pMotionCircularBuffer_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  DOPPLER_WINDOW_SIZE);
-
-    MMW_ALLOC_BUF(pVitalSigns_SpectrumCplx, cmplx32ReIm_t,
-                  pDopplerWindow_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->breathingWfm_Spectrum_FftSize);
-
-    MMW_ALLOC_BUF(pVitalSignsBuffer_Cplx, cmplx32ReIm_t,
-                  pVitalSigns_SpectrumCplx_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->breathingWfm_Spectrum_FftSize);
-
-    MMW_ALLOC_BUF(pVitalSignsSpectrumTwiddle32x32, cmplx32ReIm_t,
-                  pVitalSignsBuffer_Cplx_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->breathingWfm_Spectrum_FftSize);
-
-    MMW_ALLOC_BUF(pVitalSigns_Breath_AbsSpectrum, float,
-                  pVitalSignsSpectrumTwiddle32x32_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->breathingWfm_Spectrum_FftSize);
-
-    MMW_ALLOC_BUF(pVitalSigns_Heart_AbsSpectrum, float,
-                  pVitalSigns_Breath_AbsSpectrum_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->heartWfm_Spectrum_FftSize);
-
-    MMW_ALLOC_BUF(pFilterCoefsBreath, float,
-                  pVitalSigns_Heart_AbsSpectrum_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  IIR_FILTER_BREATH_NUM_STAGES * IIR_FILTER_COEFS_SECOND_ORDER);
-
-    MMW_ALLOC_BUF(pScaleValsBreath, float,
-                  pFilterCoefsBreath_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  IIR_FILTER_BREATH_NUM_STAGES + 1);
-
-    MMW_ALLOC_BUF(pFilterCoefsHeart_4Hz, float,
-                  pScaleValsBreath_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  IIR_FILTER_HEART_NUM_STAGES * IIR_FILTER_COEFS_SECOND_ORDER);
-
-    MMW_ALLOC_BUF(pScaleValsHeart_4Hz, float,
-                  pFilterCoefsHeart_4Hz_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  IIR_FILTER_HEART_NUM_STAGES + 1);
-
-    MMW_ALLOC_BUF(pXcorr, float,
-                  pScaleValsHeart_4Hz_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  XCORR_NUM_LAGS);
-
-    MMW_ALLOC_BUF(pTempReal_Prev, float,
-                  pXcorr_4Hz_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->numRangeBins);
-
-    MMW_ALLOC_BUF(pTempImag_Prev, float,
-                  pTempReal_Prev_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->numRangeBins);
-
-    MMW_ALLOC_BUF(pRangeProfileClutterRemoved, float,
-                  pTempImag_Prev_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->numRangeBins);
-
-    MMW_ALLOC_BUF(pDataOutTemp, float,
-                  pTempImag_Prev_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
-                  obj->heartWfm_Spectrum_FftSize);
 
 //////////////  Parameters :  IIR-Cascade Bandpass Filter  //////////////////////////////////////
 
