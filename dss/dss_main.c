@@ -993,11 +993,23 @@ int32_t MmwDemo_dssSendProcessOutputToMSS
     message.type = MMWDEMO_DSS2MSS_DETOBJ_READY;
 
     /* 2. 填充通用 Header */
-    message.body.detObj.header.platform = 0xA1642; // 根据你的芯片型号可能是 A1642 或 A1843
+#ifdef SOC_XWR16XX
+    message.body.detObj.header.platform = 0xA1642;
+#elif defined(SOC_XWR18XX)
+    message.body.detObj.header.platform = 0xA1843;
+#elif defined(SOC_XWR68XX)
+    message.body.detObj.header.platform = 0xA6843;
+#else
+    message.body.detObj.header.platform = 0xFFFF; // 未知型号
+#endif
+    // message.body.detObj.header.platform = 0xA1642; // 根据你的芯片型号可能是 A1642 或 A1843
     message.body.detObj.header.magicWord[0] = 0x0102;
     message.body.detObj.header.magicWord[1] = 0x0304;
-    message.body.detObj.header.magicWord[2] = 0x0506;
-    message.body.detObj.header.magicWord[3] = 0x0708;
+    // message.body.detObj.header.magicWord[2] = 0x0506;
+    message.body.detObj.header.magicWord[2] = ((obj->numTxAntennas & 0xFF) << 8) | 
+                                              (obj->numRxAntennas & 0xFF);
+    // message.body.detObj.header.magicWord[3] = 0x0708;
+    message.body.detObj.header.magicWord[3] = (uint16_t)(obj->numDopplerBins);
     message.body.detObj.header.numDetectedObj = 0; // 我们不检测目标，设为0
     message.body.detObj.header.version =    MMWAVE_SDK_VERSION_BUILD |
                                             (MMWAVE_SDK_VERSION_BUGFIX << 8) |
@@ -1780,7 +1792,7 @@ bool MmwDemo_parseProfileAndChirpConfig(MmwDemo_DSS_DataPathObj *dataPathObj,
                 }
                 else
                 {
-                    validChirpHasOneTxPerChirp = ((chirpTxEn == 0x1) || (chirpTxEn == 0x2));
+                    validChirpHasOneTxPerChirp = ((chirpTxEn == 0x1) || (chirpTxEn == 0x2) || (chirpTxEn == 0x4));
                 }
                 /* if this is the first chirp, record the chirp's
                    MIMO config as profile's MIMO config. We dont handle intermix
@@ -1826,6 +1838,10 @@ bool MmwDemo_parseProfileAndChirpConfig(MmwDemo_DSS_DataPathObj *dataPathObj,
                     numTxAntAzim++;
                 }
                 if (validProfileTxEn & 0x2)
+                {
+                    numTxAntAzim++;
+                }
+                if (validProfileTxEn & 0x4)
                 {
                     numTxAntAzim++;
                 }
