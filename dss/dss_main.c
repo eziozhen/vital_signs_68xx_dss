@@ -982,110 +982,71 @@ int32_t MmwDemo_dssSendProcessOutputToMSS
     MmwDemo_DSS_DataPathObj   *obj
 )
 {
-    uint32_t            i;
-    uint8_t             *ptrCurrBuffer;
-    uint32_t            totalHsmSize = 0;
-    uint32_t            totalPacketLen = sizeof(MmwDemo_output_message_header);
-    uint32_t            itemPayloadLen;
     int32_t             retVal = 0;
     MmwDemo_message     message;
     uint32_t            tlvIdx = 0;
+    uint32_t            totalPacketLen = 0;
+    uint32_t            rawDataSize;
 
-    /* Get Gui Monitor configuration */
-    //pGuiMonSel = &obj->cliCfg->guiMonSel;
-
-    /* Validate input params */
-    if(ptrHsmBuffer == NULL)
-    {
-        retVal = -1;
-        goto Exit;
-    }
-
-    /* Clear message to MSS */
+    /* 1. 清空消息结构体 */
     memset((void *)&message, 0, sizeof(MmwDemo_message));
     message.type = MMWDEMO_DSS2MSS_DETOBJ_READY;
-    /* Header: */
-    message.body.detObj.header.platform = 0xA1642;
+
+    /* 2. 填充通用 Header */
+    message.body.detObj.header.platform = 0xA1642; // 根据你的芯片型号可能是 A1642 或 A1843
     message.body.detObj.header.magicWord[0] = 0x0102;
     message.body.detObj.header.magicWord[1] = 0x0304;
     message.body.detObj.header.magicWord[2] = 0x0506;
     message.body.detObj.header.magicWord[3] = 0x0708;
-    message.body.detObj.header.numDetectedObj = 99;//obj->numDetObj;
-    message.body.detObj.header.version =    MMWAVE_SDK_VERSION_BUILD |   //DEBUG_VERSION
+    message.body.detObj.header.numDetectedObj = 0; // 我们不检测目标，设为0
+    message.body.detObj.header.version =    MMWAVE_SDK_VERSION_BUILD |
                                             (MMWAVE_SDK_VERSION_BUGFIX << 8) |
                                             (MMWAVE_SDK_VERSION_MINOR << 16) |
                                             (MMWAVE_SDK_VERSION_MAJOR << 24);
 
-    /* Set pointer to HSM buffer */
-    ptrCurrBuffer = ptrHsmBuffer;
+    /* 3. 计算 Raw Data (Radar Cube) 的大小 */
+    /* 公式：Tx * Rx * DopplerBins * RangeBins * 4字节(Complex16) */
+    rawDataSize = obj->numTxAntennas * obj->numRxAntennas * obj->numDopplerBins * obj->numRangeBins * sizeof(cmplx16ReIm_t);
 
-   {
-        VitalSignsDemo_OutputStats vitalSignsStats;
-        itemPayloadLen = sizeof(VitalSignsDemo_OutputStats);
-        totalHsmSize += itemPayloadLen;
-        if(totalHsmSize > outputBufSize)
-        {
-            retVal = -1;
-            goto Exit;
-        }
+    /* 4. 构建 TLV (Type-Length-Value) */
+    /* 我们只有一个 TLV，就是原始数据 */
+    
+    // 设置类型 (Type)
+    message.body.detObj.tlv[tlvIdx].type = MMWDEMO_OUTPUT_MSG_STATS;
+    
+    // 设置长度 (Length)
+    message.body.detObj.tlv[tlvIdx].length = rawDataSize;
+    
+    // 设置地址 (Address) - 【最关键的一步】
+    // 直接指向 L3 中的 radarCube，不需要 memcpy 到 ptrHsmBuffer！
+    // MSS (Master Subsystem) 可以直接访问这个 L3 地址进行 UART 发送
+    message.body.detObj.tlv[tlvIdx].address = (uint32_t) obj->radarCube;
+    
+    tlvIdx++; // 现在 tlvIdx = 1
 
-        vitalSignsStats = obj->VitalSigns_Output;
+    /* 5. 计算总包长 (Total Packet Length) */
+    /* 总长 = Header长度 + 所有TLV Header长度 + 所有TLV 数据长度 */
+    totalPacketLen = sizeof(MmwDemo_output_message_header) + 
+                     (sizeof(MmwDemo_output_message_tl) * tlvIdx) + 
+                     rawDataSize;
 
-        memcpy(ptrCurrBuffer, (void *)&vitalSignsStats, itemPayloadLen);
+    /* 6. 填充 Header 中的剩余信息 */
+    message.body.detObj.header.numTLVs = tlvIdx;
+    
+    // 对齐总包长 (这也是原有代码的逻辑，保持一致)
+    message.body.detObj.header.totalPacketLen = MMWDEMO_OUTPUT_MSG_SEGMENT_LEN *
+            ((totalPacketLen + (MMWDEMO_OUTPUT_MSG_SEGMENT_LEN-1))/MMWDEMO_OUTPUT_MSG_SEGMENT_LEN);
+            
+    message.body.detObj.header.timeCpuCycles =  Cycleprofiler_getTimeStamp();
+    message.body.detObj.header.frameNumber = gMmwDssMCB.stats.frameStartIntCounter;
+    message.body.detObj.header.subFrameNumber = gMmwDssMCB.subFrameIndx;
 
-        message.body.detObj.tlv[tlvIdx].length = itemPayloadLen;
-        message.body.detObj.tlv[tlvIdx].type = MMWDEMO_OUTPUT_MSG_STATS;
-        message.body.detObj.tlv[tlvIdx].address = (uint32_t) ptrCurrBuffer;;
-        tlvIdx++;
-
-        /* Incrementing pointer to HSM buffer */
-        ptrCurrBuffer = (uint8_t *)((uint32_t)ptrHsmBuffer + totalHsmSize);
-        totalPacketLen += sizeof(MmwDemo_output_message_tl) + itemPayloadLen;
-
-        // Send out Range Bin
-        uint16_t *ptrMatrix = (uint16_t *)ptrCurrBuffer;
-
-        if (obj->cliCfg->vitalSigns_GuiMonSel.guiFlag_ClutterRemoval ==1)
-        {
-            for(i = 0; i < obj->numRangeBinProcessed; i++)
-               {
-                ptrMatrix[2*i]   = obj->pRangeProfileClutterRemoved[i];
-                ptrMatrix[2*i+1] = obj->pRangeProfileClutterRemoved[i];
-               }
-        }
-        else
-        {
-            for(i = 0; i < obj->numRangeBinProcessed; i++)
-               {
-               ptrMatrix[2*i]   = obj->pRangeProfileCplx[i].real;
-               ptrMatrix[2*i+1] = obj->pRangeProfileCplx[i].imag;
-               }
-        }
-        itemPayloadLen = obj->numRangeBinProcessed *sizeof(cmplx16ImRe_t);
-
-        message.body.detObj.tlv[tlvIdx].length = itemPayloadLen;
-        message.body.detObj.tlv[tlvIdx].type = MMWDEMO_OUTPUT_MSG_RANGE_PROFILE;
-        message.body.detObj.tlv[tlvIdx].address = (uint32_t) ptrCurrBuffer;
-        tlvIdx++;
-        totalPacketLen += sizeof(MmwDemo_output_message_tl) + itemPayloadLen;
-    }
-
-    if (retVal == 0)
+    /* 7. 通过 Mailbox 发送消息给 MSS */
+    if (MmwDemo_mboxWrite(&message) != 0)
     {
-        message.body.detObj.header.numTLVs = tlvIdx;
-        /* Round up packet length to multiple of MMWDEMO_OUTPUT_MSG_SEGMENT_LEN */
-        message.body.detObj.header.totalPacketLen = MMWDEMO_OUTPUT_MSG_SEGMENT_LEN *
-                ((totalPacketLen + (MMWDEMO_OUTPUT_MSG_SEGMENT_LEN-1))/MMWDEMO_OUTPUT_MSG_SEGMENT_LEN);
-        message.body.detObj.header.timeCpuCycles =  Cycleprofiler_getTimeStamp();
-        message.body.detObj.header.frameNumber = gMmwDssMCB.stats.frameStartIntCounter;
-        message.body.detObj.header.subFrameNumber = gMmwDssMCB.subFrameIndx;
-
-        if (MmwDemo_mboxWrite(&message) != 0)
-        {
-            retVal = -1;
-        }
+        retVal = -1;
     }
-Exit:
+
     return retVal;
 }
 
