@@ -2653,7 +2653,24 @@ void MmwDemo_processChirp(MmwDemo_DSS_DataPathObj *obj, uint16_t chirpIndxInMult
        destination address in this situation.
        e.g if numRangeBins = 1024, numRxAntennas = 4 then destinationBindex becomes -32768 */
     chirpBytes = obj->numRangeBins * obj->numRxAntennas * sizeof(cmplx16ReIm_t);
-    if ((obj->numTxAntennas == 1) && (chirpBytes >= (uint32_t)16384))
+    if (obj->numTxAntennas == 3)
+    {
+        uint32_t txAntIdx = obj->txAntennaCount;    // 当前是第几根 Tx 天线 (0, 1, 2)
+        uint32_t dopplerIdx = obj->dopplerBinCount; // 当前是第几个 Doppler Bin (即第几轮 Chirp Loop)
+        
+        // 计算单个 Tx 天线对应的数据平面总大小 (DopplerBins * 单个Chirp大小)
+        uint32_t oneTxPlaneSize = obj->numDopplerBins * chirpBytes;
+        
+        // 计算绝对偏移量
+        // Offset = (当前天线是第几个 * 每个天线总大小) + (当前是第几轮Chirp * 单次Chirp大小)
+        uint32_t destOffset = (txAntIdx * oneTxPlaneSize) + (dopplerIdx * chirpBytes);
+
+        // 强制设置 EDMA 目标地址
+        EDMA_setDestinationAddress(context->edmaHandle[MMW_DATA_PATH_EDMA_INSTANCE], 
+                                   channelId,
+                                   (uint32_t)obj->radarCube + destOffset);
+    }
+    else if ((obj->numTxAntennas == 1) && (chirpBytes >= (uint32_t)16384))
     {
         EDMA_setDestinationAddress(context->edmaHandle[MMW_DATA_PATH_EDMA_INSTANCE], channelId,
             (uint32_t)obj->radarCube + (uint32_t)obj->chirpCount * chirpBytes);
@@ -3176,7 +3193,7 @@ void MmwDemo_dataPathConfigBuffers(MmwDemo_DSS_DataPathObj *obj, uint32_t adcBuf
     MMW_ALLOC_BUF(radarCube, cmplx16ReIm_t,
         ADCdataBuf_end, SYS_MEMORY_ALLOC_DOUBLE_WORD_ALIGN_DSP,
         obj->numRangeBins * obj->numDopplerBins * obj->numRxAntennas *
-        obj->numTxAntennas * 2);
+        obj->numTxAntennas);
 
 
 //////////////  Parameters :  IIR-Cascade Bandpass Filter  //////////////////////////////////////

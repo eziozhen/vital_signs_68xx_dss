@@ -1022,7 +1022,7 @@ int32_t MmwDemo_dssSendProcessOutputToMSS
 
     /* 4. 构建 TLV (Type-Length-Value) */
     /* 我们只有一个 TLV，就是原始数据 */
-    
+
     // 设置类型 (Type)
     message.body.detObj.tlv[tlvIdx].type = MMWDEMO_OUTPUT_MSG_STATS;
     
